@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getCodexStatus } from "@/lib/codex";
 import { isSupportedCodexSelection } from "@/lib/codex-selection";
 import { config } from "@/lib/config";
+import { isSupportedClaudeSelection } from "@/lib/engines";
 import { listOpenPullRequests } from "@/lib/pull-requests";
 import { getReviewQueue } from "@/lib/reviews/queue";
 
@@ -12,7 +13,8 @@ export const runtime = "nodejs";
 
 const requestSchema = z.object({
   context: z.string().max(50_000).optional(),
-  model: z.string().min(1).optional().default(config.CODEX_MODEL),
+  engine: z.enum(["codex", "claude"]).optional().default(config.REVIEW_ENGINE),
+  model: z.string().min(1).optional(),
   number: z.number().int().positive(),
   reasoningEffort: z
     .enum(["low", "medium", "high", "xhigh"])
@@ -28,7 +30,11 @@ export function GET(): NextResponse {
   return NextResponse.json({
     body: {
       context: "Optional request-specific review focus",
-      model: config.CODEX_MODEL,
+      engine: config.REVIEW_ENGINE,
+      model:
+        config.REVIEW_ENGINE === "claude"
+          ? config.CLAUDE_MODEL
+          : config.CODEX_MODEL,
       number: 123,
       reasoningEffort: config.CODEX_REASONING_EFFORT,
       refreshContext: false,
@@ -43,10 +49,10 @@ export function GET(): NextResponse {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const input = requestSchema.parse(await request.json());
-    const [pullRequests, codexStatus] = await Promise.all([
-      listOpenPullRequests(),
-      getCodexStatus(),
-    ]);
+    const model =
+      input.model ??
+      (input.engine === "claude" ? config.CLAUDE_MODEL : config.CODEX_MODEL);
+    const pullRequests = await listOpenPullRequests();
     const pullRequest = pullRequests.pullRequests.find(
       (candidate) =>
         candidate.repository === input.repository &&
@@ -60,24 +66,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    if (
-      !isSupportedCodexSelection(
-        codexStatus,
-        input.model,
-        input.reasoningEffort,
-      )
-    ) {
-      return NextResponse.json(
-        {
-          error: `Model ${input.model} does not support ${input.reasoningEffort} reasoning for this Codex account.`,
-        },
-        { status: 400 },
-      );
+    if (input.engine === "claude") {
+      if (!isSupportedClaudeSelection(model, input.reasoningEffort)) {
+        return NextResponse.json(
+          {
+            error: `Claude model ${model} does not support ${input.reasoningEffort} effort.`,
+          },
+          { status: 400 },
+        );
+      }
+    } else {
+      const codexStatus = await getCodexStatus();
+      if (
+        !isSupportedCodexSelection(codexStatus, model, input.reasoningEffort)
+      ) {
+        return NextResponse.json(
+          {
+            error: `Model ${model} does not support ${input.reasoningEffort} reasoning for this Codex account.`,
+          },
+          { status: 400 },
+        );
+      }
     }
 
     const job = await getReviewQueue().enqueue(
       pullRequest,
-      input.model,
+      input.engine,
+      model,
       input.reasoningEffort,
       input.context,
       input.refreshContext,

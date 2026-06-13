@@ -16,6 +16,8 @@ export type MergeState =
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 
+export type Engine = "codex" | "claude";
+
 export interface CodexUsageWindow {
   remainingPercent: number;
   resetsAt: string | null;
@@ -83,6 +85,7 @@ export type ReviewJobEventLevel =
   | "warning";
 
 export type ReviewJobEventSource =
+  | "claude"
   | "codex"
   | "git"
   | "github"
@@ -100,6 +103,7 @@ export interface ReviewJobEvent {
 export interface ReviewJob {
   commentUrl?: string;
   createdAt: string;
+  engine: Engine;
   error?: string;
   id: string;
   model: string;

@@ -31,7 +31,7 @@ function statusTitle(status: ReviewJobStatus): string {
     case "preparing":
       return "Preparing repository context";
     case "reviewing":
-      return "Codex is reviewing";
+      return "Reviewing the pull request";
     case "posting":
       return "Posting the GitHub review";
     case "completed":
@@ -172,6 +172,10 @@ export function ReviewSession({
           <div className="session-card">
             <span>Configuration</span>
             <dl>
+              <div>
+                <dt>Engine</dt>
+                <dd>{job?.engine ?? "..."}</dd>
+              </div>
               <div>
                 <dt>Model</dt>
                 <dd>{job?.model ?? "..."}</dd>

@@ -11,12 +11,14 @@ import { useRouter } from "next/navigation";
 
 import type {
   CodexStatus,
+  Engine,
   PullRequest,
   PullRequestList,
   ReasoningEffort,
   ReviewJob,
   ReviewJobStatus,
 } from "@/lib/types";
+import { CLAUDE_MODELS } from "@/lib/engines";
 
 const ACTIVE_STATUSES = new Set<ReviewJobStatus>([
   "queued",
@@ -66,7 +68,7 @@ function reviewLabel(job: ReviewJob | undefined): string {
     case "preparing":
       return "Gathering context";
     case "reviewing":
-      return "Codex is reviewing";
+      return "Reviewing";
     case "posting":
       return "Posting review";
     case "completed":
@@ -142,6 +144,7 @@ export function PullRequestDashboard(): React.ReactElement {
   const router = useRouter();
   const [data, setData] = useState<PullRequestList | null>(null);
   const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
+  const [engine, setEngine] = useState<Engine>("codex");
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<string, ReviewJob>>({});
   const [loading, setLoading] = useState(true);
@@ -152,6 +155,7 @@ export function PullRequestDashboard(): React.ReactElement {
   const [reviewContext, setReviewContext] = useState("");
   const [selectedModel, setSelectedModel] = useState("gpt-5.5");
   const [triggeringKey, setTriggeringKey] = useState<string | null>(null);
+  const engineRef = useRef<Engine>("codex");
   const reasoningEffortRef = useRef<ReasoningEffort>("high");
   const selectedModelRef = useRef("gpt-5.5");
 
@@ -203,6 +207,14 @@ export function PullRequestDashboard(): React.ReactElement {
         throw new Error(body.error ?? "Unable to load Codex usage");
       }
 
+      setCodexStatus(body);
+
+      // The Claude engine uses a static catalog, so only let the Codex usage
+      // snapshot drive model/effort selection while Codex is the active engine.
+      if (engineRef.current !== "codex") {
+        return;
+      }
+
       const currentModel = body.models.find(
         (model) => model.id === selectedModelRef.current,
       );
@@ -214,7 +226,6 @@ export function PullRequestDashboard(): React.ReactElement {
         (effort) => effort.value === reasoningEffortRef.current,
       );
 
-      setCodexStatus(body);
       if (nextModel && nextModel.id !== selectedModelRef.current) {
         selectedModelRef.current = nextModel.id;
         setSelectedModel(nextModel.id);
@@ -336,6 +347,7 @@ export function PullRequestDashboard(): React.ReactElement {
       const response = await fetch("/api/reviews", {
         body: JSON.stringify({
           context: reviewContext.trim() || undefined,
+          engine,
           model: selectedModel,
           number: pullRequest.number,
           reasoningEffort,
@@ -385,7 +397,9 @@ export function PullRequestDashboard(): React.ReactElement {
   ).length;
   const draftCount =
     data?.pullRequests.filter((pullRequest) => pullRequest.isDraft).length ?? 0;
-  const selectedModelOption = codexStatus?.models.find(
+  const availableModels =
+    engine === "claude" ? CLAUDE_MODELS : codexStatus?.models ?? [];
+  const selectedModelOption = availableModels.find(
     (model) => model.id === selectedModel,
   );
 
@@ -400,7 +414,7 @@ export function PullRequestDashboard(): React.ReactElement {
   };
 
   const changeModel = (modelId: string): void => {
-    const model = codexStatus?.models.find(
+    const model = availableModels.find(
       (candidate) => candidate.id === modelId,
     );
     selectedModelRef.current = modelId;
@@ -415,6 +429,28 @@ export function PullRequestDashboard(): React.ReactElement {
       reasoningEffortRef.current = model.defaultReasoningEffort;
       setReasoningEffort(model.defaultReasoningEffort);
     }
+  };
+
+  const changeEngine = (nextEngine: Engine): void => {
+    engineRef.current = nextEngine;
+    setEngine(nextEngine);
+
+    const models =
+      nextEngine === "claude" ? CLAUDE_MODELS : codexStatus?.models ?? [];
+    const nextModel = models.find((model) => model.isDefault) ?? models[0];
+    if (!nextModel) {
+      return;
+    }
+
+    selectedModelRef.current = nextModel.id;
+    setSelectedModel(nextModel.id);
+
+    const nextReasoning =
+      nextModel.reasoningEfforts.find(
+        (effort) => effort.value === reasoningEffort,
+      )?.value ?? nextModel.defaultReasoningEffort;
+    reasoningEffortRef.current = nextReasoning;
+    setReasoningEffort(nextReasoning);
   };
 
   return (
@@ -525,13 +561,26 @@ export function PullRequestDashboard(): React.ReactElement {
 
       <section className="review-controls" aria-label="Review configuration">
         <label>
+          <span>Engine</span>
+          <select
+            onChange={(event) => changeEngine(event.target.value as Engine)}
+            value={engine}
+          >
+            <option value="codex">Codex</option>
+            <option value="claude">Claude</option>
+          </select>
+          <small>
+            {engine === "claude" ? "Anthropic Claude Code" : "OpenAI Codex"}
+          </small>
+        </label>
+        <label>
           <span>Model</span>
           <select
-            disabled={!codexStatus}
+            disabled={engine === "codex" && !codexStatus}
             onChange={(event) => changeModel(event.target.value)}
             value={selectedModel}
           >
-            {(codexStatus?.models ?? []).map((model) => (
+            {availableModels.map((model) => (
               <option key={model.id} value={model.id}>
                 {model.displayName}
               </option>
@@ -660,7 +709,8 @@ export function PullRequestDashboard(): React.ReactElement {
                     {job ? (
                       <span className={`job-status job-${job.status}`}>
                         <span />
-                        {job.status} · {job.model}/{job.reasoningEffort}
+                        {job.status} · {job.engine ?? "codex"} {job.model}/
+                        {job.reasoningEffort}
                       </span>
                     ) : (
                       <span className="job-status">

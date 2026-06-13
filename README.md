@@ -1,15 +1,20 @@
 # Codex PR Pilot
 
 A local Woodpecker-inspired dashboard for listing pull requests authored by the
-current `gh` user, starting Codex reviews, and posting the result as a native
-GitHub pull-request review.
+current `gh` user, starting a **Codex or Claude** review, and posting the result
+as a native GitHub pull-request review. Pick the engine per request from the
+dashboard or the trigger API.
 
 ## Requirements
 
 - Node.js 24+
 - Docker
 - GitHub CLI authenticated with `gh auth login`
-- Codex CLI authenticated with `codex login`
+- For the Codex engine: Codex CLI authenticated with `codex login`
+- For the Claude engine: Claude Code authenticated with `claude login`
+  (or set `ANTHROPIC_API_KEY`)
+
+Authenticate whichever engine(s) you intend to use; you do not need both.
 
 The GitHub token needs access to the repositories being reviewed and permission
 to create issue comments, pull-request reviews, and commit statuses.
@@ -23,8 +28,8 @@ npm run dev
 
 Open `http://127.0.0.1:5050`. The scripts bind to loopback intentionally.
 
-The first review builds the `codex-pr-pilot-runner:local` Docker image. Build it
-ahead of time with:
+The first review builds the `pr-pilot-runner:local` Docker image (it bundles
+both the Codex and Claude CLIs). Build it ahead of time with:
 
 ```bash
 npm run review-image
@@ -46,6 +51,7 @@ curl -X POST http://127.0.0.1:5050/api/reviews \
   -d '{
     "repository": "owner/repository",
     "number": 123,
+    "engine": "codex",
     "model": "gpt-5.5",
     "reasoningEffort": "high",
     "context": "Focus on concurrency and backward compatibility.",
@@ -64,6 +70,25 @@ comment or review must be visible immediately.
 
 The dashboard reads the authenticated account's model catalog from Codex.
 Requests are rejected when a model/reasoning combination is unavailable.
+
+## Review engines
+
+Each review runs with one engine, chosen per request (dashboard dropdown or the
+`engine` field in the trigger API). Both run the same custom prompt inside the
+same sandboxed container and emit the same structured JSON review.
+
+- **Codex** (`engine: "codex"`) — runs `codex exec` with the model and reasoning
+  effort from your Codex account's catalog (validated against `codex app-server`).
+- **Claude** (`engine: "claude"`) — runs `claude --print --output-format
+  stream-json --allow-dangerously-skip-permissions` with a Claude model
+  (`opus`, `sonnet`, or `haiku`) and an `--effort` level. The container reuses
+  the host's `claude login` credentials, or `ANTHROPIC_API_KEY` if set. `Edit`,
+  `Write`, and `NotebookEdit` tools are disabled, and the PR checkout is mounted
+  read-only, so Claude can inspect and clone dependencies but cannot modify the
+  reviewed code.
+
+Set the default engine and Claude default model with `REVIEW_ENGINE` and
+`CLAUDE_MODEL`.
 
 ## Review workflow
 

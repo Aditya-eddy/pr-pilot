@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { config } from "@/lib/config";
 import type {
+  Engine,
   PullRequest,
   ReasoningEffort,
   ReviewJob,
@@ -19,6 +20,7 @@ class ReviewQueue {
 
   async enqueue(
     pullRequest: PullRequest,
+    engine: Engine,
     model: string,
     reasoningEffort: ReasoningEffort,
     requestContext?: string,
@@ -44,6 +46,7 @@ class ReviewQueue {
     const now = new Date().toISOString();
     const job: ReviewJob = {
       createdAt: now,
+      engine,
       id: randomUUID(),
       model,
       pullRequest,
@@ -110,7 +113,7 @@ declare global {
   var codexPilotReviewQueueVersion: string | undefined;
 }
 
-const REVIEW_QUEUE_VERSION = "4";
+const REVIEW_QUEUE_VERSION = "5";
 
 export function getReviewQueue(): ReviewQueue {
   if (

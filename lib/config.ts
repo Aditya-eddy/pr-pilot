@@ -12,15 +12,13 @@ const optionalSecret = z.preprocess(
 );
 
 const environmentSchema = z.object({
+  ANTHROPIC_API_KEY: optionalSecret,
+  CLAUDE_MODEL: z.string().min(1).default("opus"),
   CODEX_MODEL: z.string().min(1).default("gpt-5.5"),
   CODEX_GITHUB_TOKEN: optionalSecret,
   CODEX_REASONING_EFFORT: z
     .enum(["low", "medium", "high", "xhigh"])
     .default("high"),
-  CODEX_REVIEW_IMAGE: z
-    .string()
-    .min(1)
-    .default("codex-pr-pilot-runner:local"),
   CODEX_STATUS_CACHE_TTL_SECONDS: positiveInteger(60),
   MAX_OPEN_PRS: positiveInteger(100),
   PR_CONTEXT_CACHE_TTL_SECONDS: positiveInteger(180),
@@ -28,7 +26,12 @@ const environmentSchema = z.object({
   PROMPT_REVIEW_PATH: z.string().min(1).default("prompt-review.md"),
   REDIS_URL: z.string().optional(),
   REVIEW_CONCURRENCY: positiveInteger(1),
+  REVIEW_ENGINE: z.enum(["codex", "claude"]).default("codex"),
   REVIEW_JOB_TTL_SECONDS: positiveInteger(86400),
+  REVIEW_RUNNER_IMAGE: z
+    .string()
+    .min(1)
+    .default("pr-pilot-runner:local"),
   REVIEW_TIMEOUT_MS: positiveInteger(1_800_000),
 });
 
