@@ -14,6 +14,7 @@ const optionalSecret = z.preprocess(
 const environmentSchema = z.object({
   ANTHROPIC_API_KEY: optionalSecret,
   CLAUDE_MODEL: z.string().min(1).default("opus"),
+  CLAUDE_STATUS_CACHE_TTL_SECONDS: positiveInteger(300),
   CODEX_MODEL: z.string().min(1).default("gpt-5.5"),
   CODEX_GITHUB_TOKEN: optionalSecret,
   CODEX_REASONING_EFFORT: z

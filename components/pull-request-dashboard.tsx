@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 
 import type {
+  ClaudeStatus,
   CodexStatus,
   Engine,
   PullRequest,
@@ -18,7 +19,7 @@ import type {
   ReviewJob,
   ReviewJobStatus,
 } from "@/lib/types";
-import { CLAUDE_MODELS } from "@/lib/engines";
+import { CLAUDE_MODELS, engineLabel } from "@/lib/engines";
 
 const ACTIVE_STATUSES = new Set<ReviewJobStatus>([
   "queued",
@@ -59,6 +60,19 @@ function usageWindowLabel(minutes: number | null, fallback: string): string {
   if (minutes % 1_440 === 0) return `${minutes / 1_440} day`;
   if (minutes % 60 === 0) return `${minutes / 60} hour`;
   return `${minutes} minute`;
+}
+
+function claudeStatusLabel(status: string): string {
+  switch (status) {
+    case "allowed":
+      return "Healthy";
+    case "allowed_warning":
+      return "Near limit";
+    case "rejected":
+      return "Limit reached";
+    default:
+      return status;
+  }
 }
 
 function reviewLabel(job: ReviewJob | undefined): string {
@@ -144,6 +158,7 @@ export function PullRequestDashboard(): React.ReactElement {
   const router = useRouter();
   const [data, setData] = useState<PullRequestList | null>(null);
   const [codexStatus, setCodexStatus] = useState<CodexStatus | null>(null);
+  const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null);
   const [engine, setEngine] = useState<Engine>("codex");
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<string, ReviewJob>>({});
@@ -244,6 +259,30 @@ export function PullRequestDashboard(): React.ReactElement {
         statusError instanceof Error
           ? statusError.message
           : "Unable to load Codex usage",
+      );
+    }
+  }, []);
+
+  const loadClaudeStatus = useCallback(async (refresh = false) => {
+    try {
+      const response = await fetch(
+        `/api/claude/status${refresh ? "?refresh=1" : ""}`,
+        { cache: "no-store" },
+      );
+      const body = (await response.json()) as ClaudeStatus & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Unable to load Claude usage");
+      }
+
+      setClaudeStatus(body);
+    } catch {
+      // Claude metering is best-effort (it costs a probe call); surface the gap
+      // in the usage card rather than blocking the dashboard with an error.
+      setClaudeStatus((current) =>
+        current ?? { fetchedAt: new Date().toISOString(), model: "", windows: [] },
       );
     }
   }, []);
@@ -409,6 +448,7 @@ export function PullRequestDashboard(): React.ReactElement {
       loadPullRequests(true),
       loadCodexStatus(true),
       loadActiveReviews(),
+      engine === "claude" ? loadClaudeStatus(true) : Promise.resolve(),
     ]);
     setRefreshing(false);
   };
@@ -435,6 +475,10 @@ export function PullRequestDashboard(): React.ReactElement {
     engineRef.current = nextEngine;
     setEngine(nextEngine);
 
+    if (nextEngine === "claude" && !claudeStatus) {
+      void loadClaudeStatus();
+    }
+
     const models =
       nextEngine === "claude" ? CLAUDE_MODELS : codexStatus?.models ?? [];
     const nextModel = models.find((model) => model.isDefault) ?? models[0];
@@ -457,10 +501,10 @@ export function PullRequestDashboard(): React.ReactElement {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">C</span>
+          <span className="brand-mark">P</span>
           <div>
-            <strong>Codex PR Pilot</strong>
-            <span>Automated review console</span>
+            <strong>PR Pilot</strong>
+            <span>Codex + Claude review console</span>
           </div>
         </div>
         <div className="account">
@@ -475,8 +519,8 @@ export function PullRequestDashboard(): React.ReactElement {
           <p className="eyebrow">Pull request workspace</p>
           <h1>Your open pull requests</h1>
           <p className="hero-copy">
-            Start a fresh Codex review with the complete PR conversation and
-            previous review history in context.
+            Start a fresh {engineLabel(engine)} review with the complete PR
+            conversation and previous review history in context.
           </p>
         </div>
         <button
@@ -507,36 +551,70 @@ export function PullRequestDashboard(): React.ReactElement {
           <small>Included in this view</small>
         </article>
         <article>
-          <span>Codex usage · {codexStatus?.planType ?? "account"}</span>
-          <div className="usage-windows">
-            {[codexStatus?.primary, codexStatus?.secondary].map(
-              (window, index) => (
-                <div className="usage-window" key={index}>
+          <span>
+            {engine === "claude"
+              ? "Claude usage"
+              : `Codex usage · ${codexStatus?.planType ?? "account"}`}
+          </span>
+          {engine === "claude" ? (
+            <div className="usage-windows">
+              {!claudeStatus ? (
+                <div className="usage-window">
                   <div>
-                    <b>
-                      {window
-                        ? `${window.remainingPercent}% left`
-                        : "Unavailable"}
-                    </b>
-                    <small>
-                      {usageWindowLabel(
-                        window?.windowDurationMinutes ?? null,
-                        index === 0 ? "Primary" : "Secondary",
-                      )}
-                    </small>
+                    <b>Loading…</b>
+                    <small>Fetching Claude limits</small>
                   </div>
-                  <span className="usage-track">
-                    <span
-                      style={{
-                        width: `${window?.remainingPercent ?? 0}%`,
-                      }}
-                    />
-                  </span>
-                  <small>{formatReset(window?.resetsAt ?? null)}</small>
                 </div>
-              ),
-            )}
-          </div>
+              ) : claudeStatus.windows.length === 0 ? (
+                <div className="usage-window">
+                  <div>
+                    <b>Unavailable</b>
+                    <small>Run `claude login` to enable metering</small>
+                  </div>
+                </div>
+              ) : (
+                claudeStatus.windows.map((window) => (
+                  <div className="usage-window" key={window.rateLimitType}>
+                    <div>
+                      <b>{claudeStatusLabel(window.status)}</b>
+                      <small>{window.label} window</small>
+                    </div>
+                    <small>{formatReset(window.resetsAt)}</small>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="usage-windows">
+              {[codexStatus?.primary, codexStatus?.secondary].map(
+                (window, index) => (
+                  <div className="usage-window" key={index}>
+                    <div>
+                      <b>
+                        {window
+                          ? `${window.remainingPercent}% left`
+                          : "Unavailable"}
+                      </b>
+                      <small>
+                        {usageWindowLabel(
+                          window?.windowDurationMinutes ?? null,
+                          index === 0 ? "Primary" : "Secondary",
+                        )}
+                      </small>
+                    </div>
+                    <span className="usage-track">
+                      <span
+                        style={{
+                          width: `${window?.remainingPercent ?? 0}%`,
+                        }}
+                      />
+                    </span>
+                    <small>{formatReset(window?.resetsAt ?? null)}</small>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
         </article>
       </section>
 

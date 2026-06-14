@@ -51,6 +51,19 @@ export interface CodexStatus {
   secondary: CodexUsageWindow | null;
 }
 
+export interface ClaudeRateLimitWindow {
+  label: string;
+  rateLimitType: string;
+  resetsAt: string | null;
+  status: string;
+}
+
+export interface ClaudeStatus {
+  fetchedAt: string;
+  model: string;
+  windows: ClaudeRateLimitWindow[];
+}
+
 export interface PullRequest {
   additions: number;
   author: string;

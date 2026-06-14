@@ -118,6 +118,13 @@ The dashboard displays the remaining percentage and reset time for the primary
 and secondary Codex usage windows. The snapshot is cached for
 `CODEX_STATUS_CACHE_TTL_SECONDS`.
 
+For the Claude engine the dashboard shows each rate-limit window's status and
+reset time. Claude has no free usage endpoint, so the snapshot comes from a
+cheap Haiku probe (`claude --print --tools "" ping`) that reads the
+`rate_limit_event`; it is cached for `CLAUDE_STATUS_CACHE_TTL_SECONDS` (default
+5 minutes) to keep that cost negligible. Claude does not expose a remaining
+percentage, only the window state and reset time.
+
 ## Custom prompt
 
 `prompt-review.md` is the canonical prompt entry point. It currently includes

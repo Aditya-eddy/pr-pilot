@@ -133,9 +133,9 @@ export function ReviewSession({
     <main className="session-shell">
       <header className="session-topbar">
         <Link className="session-brand" href="/">
-          <span>C</span>
+          <span>P</span>
           <div>
-            <strong>Codex PR Pilot</strong>
+            <strong>PR Pilot</strong>
             <small>Live review session</small>
           </div>
         </Link>
