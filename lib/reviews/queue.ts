@@ -85,6 +85,16 @@ class ReviewQueue {
     return jobs.filter((job): job is ReviewJob => job !== null);
   }
 
+  // Trigger-agnostic: returns every in-flight review, including those started
+  // via the API / pilot skill rather than the dashboard.
+  getAllActive(): Promise<ReviewJob[]> {
+    return this.store.listActive();
+  }
+
+  listRecent(limit?: number): Promise<ReviewJob[]> {
+    return this.store.listRecent(limit);
+  }
+
   private async drain(): Promise<void> {
     while (
       this.activeCount < config.REVIEW_CONCURRENCY &&
@@ -113,7 +123,7 @@ declare global {
   var codexPilotReviewQueueVersion: string | undefined;
 }
 
-const REVIEW_QUEUE_VERSION = "5";
+const REVIEW_QUEUE_VERSION = "6";
 
 export function getReviewQueue(): ReviewQueue {
   if (

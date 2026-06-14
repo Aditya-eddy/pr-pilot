@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -331,6 +332,13 @@ export function PullRequestDashboard(): React.ReactElement {
     return () => window.clearTimeout(timer);
   }, [loadActiveReviews, loadCodexStatus, loadPullRequests]);
 
+  // Keep discovering reviews started elsewhere (API / pilot skill), not just
+  // the ones triggered from this dashboard.
+  useEffect(() => {
+    const timer = window.setInterval(() => void loadActiveReviews(), 4_000);
+    return () => window.clearInterval(timer);
+  }, [loadActiveReviews]);
+
   const activeJobIds = useMemo(
     () =>
       Object.values(jobs)
@@ -523,15 +531,20 @@ export function PullRequestDashboard(): React.ReactElement {
             conversation and previous review history in context.
           </p>
         </div>
-        <button
-          className="refresh-button"
-          disabled={refreshing}
-          onClick={() => void refreshDashboard()}
-          type="button"
-        >
-          <RefreshIcon spinning={refreshing} />
-          {refreshing ? "Refreshing" : "Refresh cache"}
-        </button>
+        <div className="hero-actions">
+          <Link className="refresh-button" href="/reviews">
+            Review activity
+          </Link>
+          <button
+            className="refresh-button"
+            disabled={refreshing}
+            onClick={() => void refreshDashboard()}
+            type="button"
+          >
+            <RefreshIcon spinning={refreshing} />
+            {refreshing ? "Refreshing" : "Refresh cache"}
+          </button>
+        </div>
       </section>
 
       <section className="stats" aria-label="Pull request summary">

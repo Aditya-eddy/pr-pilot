@@ -16,6 +16,14 @@ import type {
 
 const HISTORY_LIMIT = 5;
 const EVENT_LIMIT = 500;
+const RECENT_LIMIT = 50;
+
+// Global, trigger-agnostic index of recent job ids (newest first). The cache
+// has no key-scan, so this is how the activity feed discovers reviews started
+// anywhere — including via the API / pilot skill, not just the dashboard.
+function recentIndexKey(): string {
+  return "review-recent-index";
+}
 
 function jobKey(jobId: string): string {
   return `review-job:${jobId}`;
@@ -50,6 +58,50 @@ export class ReviewStore {
         Math.ceil(config.REVIEW_TIMEOUT_MS / 1_000) + 600,
       ),
     ]);
+    await this.recordRecent(job.id);
+  }
+
+  private async recordRecent(jobId: string): Promise<void> {
+    const ids = (await this.cache.get<string[]>(recentIndexKey())) ?? [];
+    const next = [jobId, ...ids.filter((id) => id !== jobId)].slice(
+      0,
+      RECENT_LIMIT,
+    );
+    await this.cache.set(
+      recentIndexKey(),
+      next,
+      config.REVIEW_JOB_TTL_SECONDS,
+    );
+  }
+
+  async listRecent(limit = RECENT_LIMIT): Promise<ReviewJob[]> {
+    const ids = (await this.cache.get<string[]>(recentIndexKey())) ?? [];
+    const jobs = await Promise.all(ids.map((id) => this.get(id)));
+
+    const aliveIds: string[] = [];
+    const aliveJobs: ReviewJob[] = [];
+    ids.forEach((id, index) => {
+      const job = jobs[index];
+      if (job) {
+        aliveIds.push(id);
+        aliveJobs.push(job);
+      }
+    });
+
+    // Self-heal the index by dropping ids whose jobs have expired.
+    if (aliveIds.length !== ids.length) {
+      await this.cache.set(
+        recentIndexKey(),
+        aliveIds,
+        config.REVIEW_JOB_TTL_SECONDS,
+      );
+    }
+
+    return aliveJobs.slice(0, Math.max(0, limit));
+  }
+
+  async listActive(): Promise<ReviewJob[]> {
+    return (await this.listRecent()).filter(isActive);
   }
 
   async get(jobId: string): Promise<ReviewJob | null> {

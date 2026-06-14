@@ -792,6 +792,117 @@ button:disabled {
   }
 }
 
+.hero-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.board-grid {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 340px minmax(0, 1fr);
+}
+
+.board-list {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+  max-height: 760px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.board-item {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  padding: 14px 15px;
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease;
+  width: 100%;
+}
+
+.board-item:hover {
+  border-color: var(--border-bright);
+  transform: translateY(-1px);
+}
+
+.board-item.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+
+.board-item-top {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.board-repo {
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-item .job-status {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.board-title {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--text);
+  display: -webkit-box;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+.board-meta {
+  color: var(--subtle);
+  display: flex;
+  flex-wrap: wrap;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  gap: 12px;
+}
+
+.board-empty {
+  align-items: center;
+  border: 1px dashed var(--border-bright);
+  border-radius: 10px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  min-height: 160px;
+  padding: 20px;
+  text-align: center;
+}
+
+.board-empty strong {
+  color: var(--text);
+}
+
+.result-panel a {
+  color: var(--success);
+  font-size: 12px;
+}
+
 .session-shell {
   margin: 0 auto;
   max-width: 1380px;
@@ -1145,6 +1256,14 @@ button:disabled {
 
   .session-sidebar {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .board-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .board-list {
+    max-height: none;
   }
 }
 
